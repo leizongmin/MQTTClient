@@ -237,11 +237,8 @@ MQTTClient.prototype.pub = function (pub_topic, payload) {
 		for (n = 0; n < payload.length; n++) { //Insert payloads
 			buffer[i++] = payload.charCodeAt(n);
 		}
-        
-		// debug("||Publish|| "+pub_topic+' : '+payload);
 		
 		this.conn.write(buffer, 'ascii');
-        
 		this._resetTimeUp();
 	}
 };
