@@ -207,7 +207,7 @@ MQTTClient.prototype.sub = function (sub_topic) {
  * 发布消息
  *
  * @param {string} pub_topic 主题
- * @param {string} payload 消息
+ * @param {Buffer|string} payload 消息
  */
 MQTTClient.prototype.pub = function (pub_topic, payload) {
 	if(this.connected){
@@ -226,7 +226,10 @@ MQTTClient.prototype.pub = function (pub_topic, payload) {
 		//var_header[i++] = 0x03;
         
 		i = 0;
-		var buffer = new Buffer(2 + var_header.length+payload.length);
+		// 如果发送的消息是字符串类型，则将其转换为Buffer对象
+		if (!Buffer.isBuffer(payload))
+			payload = new Buffer(payload);
+		var buffer = new Buffer(2 + var_header.length + payload.length);
         
 		//Fix header
 		buffer[i++] = MQTTPUBLISH;
@@ -235,7 +238,7 @@ MQTTClient.prototype.pub = function (pub_topic, payload) {
 			buffer[i++] = var_header[n];
 		}
 		for (n = 0; n < payload.length; n++) { //Insert payloads
-			buffer[i++] = payload.charCodeAt(n);
+			buffer[i++] = payload[n];
 		}
 		
 		this.conn.write(buffer, 'ascii');
