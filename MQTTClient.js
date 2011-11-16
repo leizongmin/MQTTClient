@@ -15,8 +15,7 @@ var EventEmitter = require('events').EventEmitter;
 
 var MQTTCONNECT = 0x10;
 var MQTTPUBLISH = 0x30;
-var MQTTSUBSCRIBE = 0x80; //8<<4;
-
+var MQTTSUBSCRIBE = 0x80;
 var KEEPALIVE = 15000;
 
 var debug = console.log;
@@ -161,7 +160,6 @@ MQTTClient.prototype._openSession = function (id) {
 	this.conn.write(buffer, 'ascii');
 
 	this.sessionSend = true;
-	//debug('Connected as: ' + id + '\n');
 };
 
 
@@ -169,33 +167,35 @@ MQTTClient.prototype._openSession = function (id) {
  * 订阅主题
  *
  * @param {string} sub_topic 主题
+ * @param {int} level QoS等级: 0, 1, 2
  */
-MQTTClient.prototype.sub = function (sub_topic) {
+MQTTClient.prototype.sub = MQTTClient.prototype.subscribe = function (sub_topic, level) {
 	if(this.connected){
+		// Varibale header 
+		// message id
+		var message_id = makeMessageId();
+		// Payload
+		var payload = new Buffer(3 + sub_topic.length);
+		// topic length
 		var i = 0;
-		var buffer = new Buffer(7+sub_topic.length);;
-    
-		//fixed header
-		buffer[i++] = MQTTSUBSCRIBE;
-		buffer[i++] = 5 + sub_topic.length;
-
-		//varibale header
-		buffer[i++] = 0x00;
-		buffer[i++] = 0x0a; //message id
-
-		//payload
-		buffer[i++] = 0x00;
-		buffer[i++] = sub_topic.length;
-
+		payload[i++] = sub_topic.length >> 8;
+		payload[i++] = sub_topic.length & 0xFF;
+		// topic string
 		for (var n = 0; n < sub_topic.length; n++) {
-			buffer[i++] = sub_topic.charCodeAt(n);
+			payload[i++] = sub_topic.charCodeAt(n);
 		}
-		buffer[i++] = 0x00;
-    
-		// debug('Subcribe to:'+sub_topic);
-		
-		this.conn.write(buffer, 'ascii');
-    
+		// requested QoS
+		payload[i++] = Number(level);
+		// Fixed header
+		var fixed_header = fixHeader(MQTTSUBSCRIBE, 0, 0, 0, payload.length + 2);
+		var buffer = new Buffer(fixed_header.length + payload.length + 2);
+		// 连接fixheader
+		fixed_header.copy(buffer, 0, 0, fixed_header.length);
+		// 连接message id
+		message_id.copy(buffer, fixed_header.length, 0, 2);
+		// 连接payload
+		payload.copy(buffer, fixed_header.length + 2, 0, payload.length);
+		this.conn.write(buffer);
 		this._resetTimeUp();
 	}
 	else {
@@ -208,40 +208,37 @@ MQTTClient.prototype.sub = function (sub_topic) {
  *
  * @param {string} pub_topic 主题
  * @param {Buffer|string} payload 消息
+ * @param {int|bool} retained 是否保留
  */
-MQTTClient.prototype.pub = function (pub_topic, payload) {
+MQTTClient.prototype.pub = MQTTClient.prototype.publish = function (pub_topic, payload, retained) {
 	if(this.connected){
 		var i = 0, n = 0;
 		var var_header = new Buffer(2 + pub_topic.length);
         
-		//Variable header
-		//Assume payload length no longer than 128
-		var_header[i++] = 0;
-		var_header[i++] = pub_topic.length;
+		// Variable header
+		// topic length
+		var_header[i++] = pub_topic.length >> 8
+		var_header[i++] = pub_topic.length & 0xFF;
+		// topic string
 		for (n = 0; n < pub_topic.length; n++) {
 			var_header[i++] = pub_topic.charCodeAt(n);
 		}
-		//QoS 1&2
-		//var_header[i++] = 0;
-		//var_header[i++] = 0x03;
-        
+		// payload
 		i = 0;
 		// 如果发送的消息是字符串类型，则将其转换为Buffer对象
 		if (!Buffer.isBuffer(payload))
 			payload = new Buffer(payload);
-		var buffer = new Buffer(2 + var_header.length + payload.length);
         
-		//Fix header
-		buffer[i++] = MQTTPUBLISH;
-		buffer[i++] = payload.length + var_header.length;
-		for (n = 0; n < var_header.length; n++) {
-			buffer[i++] = var_header[n];
-		}
-		for (n = 0; n < payload.length; n++) { //Insert payloads
-			buffer[i++] = payload[n];
-		}
+		// Fix header
+		var fixed_header = fixHeader(MQTTPUBLISH, 0, 0, retained, var_header.length + payload.length);
+		var buffer = new Buffer(fixed_header.length + var_header.length + payload.length);
+		fixed_header.copy(buffer, 0, 0, fixed_header.length);
+		// 连接topic
+		var_header.copy(buffer, fixed_header.length, 0, var_header.length);
+		// 连接payload
+		payload.copy(buffer, fixed_header.length + var_header.length, 0, payload.length);
 		
-		this.conn.write(buffer, 'ascii');
+		this.conn.write(buffer);
 		this._resetTimeUp();
 	}
 };
@@ -255,15 +252,18 @@ MQTTClient.prototype._onData = function(data){
 	var type = data[0]>>4;
 	 // PUBLISH
 	if (type == 3) {
-		var tl = data[3]+data[2]; //<<4
+		// [0xef, 0xbf] 如果长度超过128字节
+		if (data[1] == 0xef && data[2] == 0xbf)
+			var offset = 3;
+		else
+			var offset = 0;
+		var tl = data[offset + 3] + data[offset + 2];
 		var topic = new Buffer(tl);
 		for(var i = 0; i < tl; i++){
-			topic[i] = data[i+4];
+			topic[i] = data[offset + i + 4];
 		}
-		if(tl+4 <= data.length){
-			var payload = data.slice(tl+4, data.length);
-			// debug("Receive on Topic:"+topic);
-			// debug("Payload:"+payload+'\n');
+		if(offset + tl + 4 <= data.length){
+			var payload = data.slice(offset + tl + 4, data.length);
 			this.emit("message", topic, payload);
 		}
 	} 
@@ -275,7 +275,7 @@ MQTTClient.prototype._onData = function(data){
 		packet208[0] = 0xd0;
 		packet208[1] = 0x00;
 		
-		this.conn.write(packet208, 'utf8');
+		this.conn.write(packet208, 'ascii');
         
 		this._resetTimeUp();
 	}
@@ -289,7 +289,7 @@ MQTTClient.prototype._live = function () {
 	var packet192 = new Buffer(2);
 	packet192[0] = 0xc0;
 	packet192[1] = 0x00;
-	this.conn.write(packet192, 'utf8');
+	this.conn.write(packet192, 'ascii');
     
 	this._resetTimeUp();
 };
@@ -304,3 +304,52 @@ MQTTClient.prototype.close = function () {
 	packet224[1] = 0x00;
 	this.conn.write(packet224, 'utf8');
 };
+
+/**
+ * 生成header
+ *
+ * @param {int} type 消息类型
+ * @param {int} dup DUP标记
+ * @param {int} qos QoS等级
+ * @param {int} retain 是否保留
+ * @param {int} length 剩余消息长度
+ * @return {Buffer}
+ */ 
+var fixHeader = function (type, dup, qos, retain, length) {
+	var b1 = type | 
+			(Number(dup) << 3) |
+			(Number(qos) << 1) |
+			Number(retain);
+	// 生成字符串长度字节
+	var la = [];
+	var x = length;
+	var d;
+	do {
+		d = x % 128;
+		x = Math.floor(x / 128);
+		if (x > 0)
+			d = d | 0x80
+		la.push(d);
+	} while (x > 0);
+	// 组装
+	var ret = new Buffer(la.length + 1);
+	var i = 0;
+	ret[i++] = b1;
+	for (var j = 0, d; d = la[j]; j++)
+		ret[i++] = d;
+	return ret;
+}
+
+/**
+ * 生成message id
+ *
+ * @return {Buffer}
+ */
+var ___last_message_id = 0;
+var makeMessageId = function () {
+	___last_message_id++;
+	var ret = new Buffer(2);
+	ret[0] = ___last_message_id >> 8;
+	ret[1] = ___last_message_id & 0xFF;
+	return ret;
+}
