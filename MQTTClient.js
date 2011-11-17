@@ -41,14 +41,13 @@ var  MQTTClient = module.exports = function (host, port,  clientID) {
 	this.id = clientID;
 
 	this.conn = net.createConnection(port, host);
-	this.conn.setEncoding('utf8');
     
 	// 设置心跳定时器
 	self._resetTimeUp();
 
 	self.conn.addListener('data', function (data) {
 		if(!self.sessionOpened){
-			if(data.length == 4 && data.charCodeAt(3) == 0){
+			if(data.length == 4 && data[3] == 0){
 				self.sessionOpened = true;
 				// debug("Session opend\n");
 				// 触发sessionOpened事件（会话开始）
@@ -67,8 +66,7 @@ var  MQTTClient = module.exports = function (host, port,  clientID) {
 		} 
 		else {
 			if(data.length > 2){
-				var buf = new Buffer(data);
-				self._onData(buf);
+				self._onData(data);
 			}
 		}
 	});
@@ -255,38 +253,31 @@ MQTTClient.prototype._onData = function(data){
 	 // PUBLISH
 	if (type == 3) {
 		// debug(data);
-		// [0xef, 0xbf] 如果长度超过128字节
-		if (data[1] >= 0x80) {
-			var offset = 3;
-			// 消息的剩余长度
-			var ds = [data[4], data[3], data[2], data[1]];
-			var i = 3;
-			var m = 1;
-			var v = 0;
-			do {
-				var d = ds[i--];
-				v += (d & 127) * m;
-				m *= 128;
-			} while ((d & 128) != 0);
-			var rl = v * 128;
-		}
-		else {
-			var offset = 0;
-			// 消息的剩余长度
-			var rl = data[offset + 1];
-		}
-		debug('[1]rl = ' + rl);
-		debug('length = ' + data.length);
-		debug(data.slice(0, 100));
+		var offset = 0;
+		// 消息的剩余长度
+		var m = 1;
+		var v = 0;
+		do {
+			var d = data[1 + offset++];
+			v += (d & 127) * m;
+			m *= 128;
+		} while ((d & 128) != 0);
+		var rl = v;
+		offset--;
+		// debug('rl = ' + rl);
 		// 取主题长度
 		var tl = (data[offset + 2] << 8) + data[offset + 3];
 		// 取主题字符
 		var topic = data.slice(offset + 4, offset + 4 + tl);
-		// 获取消息内容
-		if (data.length < offset + 2 + rl)
-			rl = data.length - offset - 2;
-		 debug(data.length - offset - 2);
-		 debug('rl = ' + rl);
+		// 如果消息长度不足，则等待下次接收完数据，并返回
+		if (data.length < offset + 2 + rl) {
+			this._notEnough = true;
+			this._notEnoughFullLength = offset + 2 + rl;
+			this._notEnoughData = new Buffer(this._notEnoughFullLength);
+			data.copy(this._notEnoughData, 0, 0, data.length);
+			this._notEnoughLength = data.length;
+			return;
+		}
 		var payload = data.slice(offset + 4 + tl, offset + 2 + rl);
 		// 触发message事件
 		this.emit('publish', topic, payload);
@@ -294,7 +285,7 @@ MQTTClient.prototype._onData = function(data){
 		// 如果是多条消息组合在一起的，则用剩余的消息触发下一个_onData事件
 		if (data.length > offset + 2 + rl)
 			this._onData(data.slice(offset + 2 + rl, data.length));
-	} 
+	}
 	 // PINGREG -- Ask for alive
 	else if (type == 12) {
 		// Send [208, 0] to server
@@ -306,6 +297,31 @@ MQTTClient.prototype._onData = function(data){
 		this.conn.write(packet208);
         
 		this._resetTimeUp();
+	}
+	else {
+		// 检查是否需要接上次的数据块
+		if (this._notEnough) {
+			if (data.length + this._notEnoughLength > this._notEnoughFullLength) {
+				var need = this._notEnoughFullLength - this._notEnoughLength;
+				data.copy(this._notEnoughData, this._notEnoughLength, 0, need);
+				this._notEnough = false;
+				this._onData(this._notEnoughData);
+				this._onData(data.slice(need, data.length - need));
+			}
+			else {
+				data.copy(this._notEnoughData, this._notEnoughLength, 0, data.length);
+				this._notEnoughLength += data.length;
+				if (this._notEnoughLength >= this._notEnoughFullLength) {
+					this._notEnough = false;
+					this._onData(this._notEnoughData);
+				}
+			}
+			if (!this._notEnough) {
+				delete this._notEnoughData;
+				delete this._notEnoughLength;
+				delete this._notEnoughFullLength;
+			}
+		}
 	}
 }
 
@@ -331,6 +347,7 @@ MQTTClient.disconnect = function () {
 	packet224[0] = 0xe0;
 	packet224[1] = 0x00;
 	this.conn.write(packet224);
+	this.conn.destroy();
 };
 
 /**
