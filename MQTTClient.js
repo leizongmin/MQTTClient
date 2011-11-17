@@ -158,7 +158,7 @@ MQTTClient.prototype._openSession = function (id) {
 		buffer[i++] = id.charCodeAt(n);
 	}
     
-	this.conn.write(buffer, 'ascii');
+	this.conn.write(buffer);
 
 	this.sessionSend = true;
 };
@@ -172,6 +172,9 @@ MQTTClient.prototype._openSession = function (id) {
  */
 MQTTClient.prototype.sub = MQTTClient.prototype.subscribe = function (sub_topic, level) {
 	if(this.connected){
+		// 将topic转换为Buffer类型
+		if (!Buffer.isBuffer(sub_topic))
+			sub_topic = new Buffer(sub_topic);
 		// Varibale header 
 		// message id
 		var message_id = makeMessageId();
@@ -182,9 +185,8 @@ MQTTClient.prototype.sub = MQTTClient.prototype.subscribe = function (sub_topic,
 		payload[i++] = sub_topic.length >> 8;
 		payload[i++] = sub_topic.length & 0xFF;
 		// topic string
-		for (var n = 0; n < sub_topic.length; n++) {
-			payload[i++] = sub_topic.charCodeAt(n);
-		}
+		sub_topic.copy(payload, i, 0, sub_topic.length);
+		i += sub_topic.length;
 		// requested QoS
 		payload[i++] = Number(level);
 		// Fixed header
@@ -213,6 +215,12 @@ MQTTClient.prototype.sub = MQTTClient.prototype.subscribe = function (sub_topic,
  */
 MQTTClient.prototype.pub = MQTTClient.prototype.publish = function (pub_topic, payload, retained) {
 	if(this.connected){
+		// 将topic和payload转换为Buffer类型
+		if (!Buffer.isBuffer(pub_topic))
+			pub_topic = new Buffer(pub_topic);
+		if (!Buffer.isBuffer(payload))
+			payload = new Buffer(payload);
+		
 		var i = 0, n = 0;
 		var var_header = new Buffer(2 + pub_topic.length);
         
@@ -221,15 +229,9 @@ MQTTClient.prototype.pub = MQTTClient.prototype.publish = function (pub_topic, p
 		var_header[i++] = pub_topic.length >> 8
 		var_header[i++] = pub_topic.length & 0xFF;
 		// topic string
-		for (n = 0; n < pub_topic.length; n++) {
-			var_header[i++] = pub_topic.charCodeAt(n);
-		}
+		pub_topic.copy(var_header, i, 0, pub_topic.length);
 		// payload
 		i = 0;
-		// 如果发送的消息是字符串类型，则将其转换为Buffer对象
-		if (!Buffer.isBuffer(payload))
-			payload = new Buffer(payload);
-        
 		// Fix header
 		var fixed_header = fixHeader(MQTTPUBLISH, 0, 0, retained, var_header.length + payload.length);
 		var buffer = new Buffer(fixed_header.length + var_header.length + payload.length);
@@ -282,7 +284,7 @@ MQTTClient.prototype._onData = function(data){
 		packet208[0] = 0xd0;
 		packet208[1] = 0x00;
 		
-		this.conn.write(packet208, 'ascii');
+		this.conn.write(packet208);
         
 		this._resetTimeUp();
 	}
@@ -296,7 +298,7 @@ MQTTClient.prototype._live = function () {
 	var packet192 = new Buffer(2);
 	packet192[0] = 0xc0;
 	packet192[1] = 0x00;
-	this.conn.write(packet192, 'ascii');
+	this.conn.write(packet192);
     
 	this._resetTimeUp();
 };
@@ -309,7 +311,7 @@ MQTTClient.prototype.close = MQTTClient.prototype.disconnect = function () {
 	var packet224 = new Buffer(2);
 	packet224[0] = 0xe0;
 	packet224[1] = 0x00;
-	this.conn.write(packet224, 'utf8');
+	this.conn.write(packet224);
 };
 
 /**
