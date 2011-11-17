@@ -53,6 +53,7 @@ var  MQTTClient = module.exports = function (host, port,  clientID) {
 				// debug("Session opend\n");
 				// 触发sessionOpened事件（会话开始）
 				self.emit("start");
+				self.emit('session');
 
 				// 重置心跳定时器
 				self._resetTimeUp(3000);
@@ -249,23 +250,29 @@ MQTTClient.prototype.pub = MQTTClient.prototype.publish = function (pub_topic, p
  * @param {buffer} data 数据
  */
 MQTTClient.prototype._onData = function(data){
-	var type = data[0]>>4;
+	var type = data[0] >> 4;
 	 // PUBLISH
 	if (type == 3) {
+		// debug(data);
 		// [0xef, 0xbf] 如果长度超过128字节
 		if (data[1] == 0xef && data[2] == 0xbf)
 			var offset = 3;
 		else
 			var offset = 0;
+		// 取整个消息的长度
+		var rl = data[offset + 1];
+		// 取主题长度
 		var tl = data[offset + 3] + data[offset + 2];
-		var topic = new Buffer(tl);
-		for(var i = 0; i < tl; i++){
-			topic[i] = data[offset + i + 4];
-		}
-		if(offset + tl + 4 <= data.length){
-			var payload = data.slice(offset + tl + 4, data.length);
-			this.emit("message", topic, payload);
-		}
+		// 取主题字符
+		var topic = data.slice(offset + 4, offset + 4 + tl);
+		// 获取消息内容
+		var payload = data.slice(offset + 4 + tl, offset + 2 + rl);
+		// 触发message事件
+		this.emit("message", topic, payload);
+		
+		// 如果是多条消息组合在一起的，则用剩余的消息触发下一个_onData事件
+		if (data.length > offset + 2 + rl)
+			this._onData(data.slice(offset + 2 + rl, data.length));
 	} 
 	 // PINGREG -- Ask for alive
 	else if (type == 12) {
@@ -297,7 +304,7 @@ MQTTClient.prototype._live = function () {
 /**
  * 断开连接
  */
-MQTTClient.prototype.close = function () {
+MQTTClient.prototype.close = MQTTClient.prototype.disconnect = function () {
 	// Send [224,0] to server
 	var packet224 = new Buffer(2);
 	packet224[0] = 0xe0;
