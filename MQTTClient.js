@@ -5,8 +5,8 @@
   * @description 修改自https://github.com/yilun/node_mqtt_client （@author Fan Yilun）
   */
 /**
- * 事件：	start: 会话开始		error: 出错			close: 连接被关闭		message: 收到消息		timeout: 超时
- * 方法：	sub: 订阅主题		pub: 发布消息			close: 关闭连接
+ * 事件：	connect: 会话开始		error: 出错			disconnect: 连接被关闭		publish: 收到消息		timeout: 超时
+ * 方法：	subscribe: 订阅主题		publish: 发布消息		disconnect: 关闭连接
  */
  
 var net = require('net');
@@ -52,8 +52,7 @@ var  MQTTClient = module.exports = function (host, port,  clientID) {
 				self.sessionOpened = true;
 				// debug("Session opend\n");
 				// 触发sessionOpened事件（会话开始）
-				self.emit("start");
-				self.emit('session');
+				self.emit('connect');
 
 				// 重置心跳定时器
 				self._resetTimeUp(3000);
@@ -85,7 +84,7 @@ var  MQTTClient = module.exports = function (host, port,  clientID) {
 		self.sessionSend = false;
 		self.sessionOpened = false;
 		// debug('Connection closed by broker');
-		self.emit('close');
+		self.emit('disconnect');
 	});
 }
 
@@ -170,7 +169,7 @@ MQTTClient.prototype._openSession = function (id) {
  * @param {string} sub_topic 主题
  * @param {int} level QoS等级: 0, 1, 2
  */
-MQTTClient.prototype.sub = MQTTClient.prototype.subscribe = function (sub_topic, level) {
+MQTTClient.prototype.subscribe = function (sub_topic, level) {
 	if(this.connected){
 		// 将topic转换为Buffer类型
 		if (!Buffer.isBuffer(sub_topic))
@@ -213,7 +212,7 @@ MQTTClient.prototype.sub = MQTTClient.prototype.subscribe = function (sub_topic,
  * @param {Buffer|string} payload 消息
  * @param {int|bool} retained 是否保留
  */
-MQTTClient.prototype.pub = MQTTClient.prototype.publish = function (pub_topic, payload, retained) {
+MQTTClient.prototype.publish = function (pub_topic, payload, retained) {
 	if(this.connected){
 		// 将topic和payload转换为Buffer类型
 		if (!Buffer.isBuffer(pub_topic))
@@ -240,7 +239,7 @@ MQTTClient.prototype.pub = MQTTClient.prototype.publish = function (pub_topic, p
 		var_header.copy(buffer, fixed_header.length, 0, var_header.length);
 		// 连接payload
 		payload.copy(buffer, fixed_header.length + var_header.length, 0, payload.length);
-		
+		// debug(buffer)
 		this.conn.write(buffer);
 		this._resetTimeUp();
 	}
@@ -257,20 +256,40 @@ MQTTClient.prototype._onData = function(data){
 	if (type == 3) {
 		// debug(data);
 		// [0xef, 0xbf] 如果长度超过128字节
-		if (data[1] == 0xef && data[2] == 0xbf)
+		if (data[1] >= 0x80) {
 			var offset = 3;
-		else
+			// 消息的剩余长度
+			var ds = [data[4], data[3], data[2], data[1]];
+			var i = 3;
+			var m = 1;
+			var v = 0;
+			do {
+				var d = ds[i--];
+				v += (d & 127) * m;
+				m *= 128;
+			} while ((d & 128) != 0);
+			var rl = v * 128;
+		}
+		else {
 			var offset = 0;
-		// 取整个消息的长度
-		var rl = data[offset + 1];
+			// 消息的剩余长度
+			var rl = data[offset + 1];
+		}
+		debug('[1]rl = ' + rl);
+		debug('length = ' + data.length);
+		debug(data.slice(0, 100));
 		// 取主题长度
-		var tl = data[offset + 3] + data[offset + 2];
+		var tl = (data[offset + 2] << 8) + data[offset + 3];
 		// 取主题字符
 		var topic = data.slice(offset + 4, offset + 4 + tl);
 		// 获取消息内容
+		if (data.length < offset + 2 + rl)
+			rl = data.length - offset - 2;
+		 debug(data.length - offset - 2);
+		 debug('rl = ' + rl);
 		var payload = data.slice(offset + 4 + tl, offset + 2 + rl);
 		// 触发message事件
-		this.emit("message", topic, payload);
+		this.emit('publish', topic, payload);
 		
 		// 如果是多条消息组合在一起的，则用剩余的消息触发下一个_onData事件
 		if (data.length > offset + 2 + rl)
@@ -306,7 +325,7 @@ MQTTClient.prototype._live = function () {
 /**
  * 断开连接
  */
-MQTTClient.prototype.close = MQTTClient.prototype.disconnect = function () {
+MQTTClient.disconnect = function () {
 	// Send [224,0] to server
 	var packet224 = new Buffer(2);
 	packet224[0] = 0xe0;
