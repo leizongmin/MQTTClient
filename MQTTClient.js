@@ -385,6 +385,7 @@ MQTTClient.prototype.disconnect = function () {
 	packet224[1] = 0x00;
 	this.conn.write(packet224);
 	this.conn.destroy();
+	clearTimeout(this.timeout);
 };
 
 /**
