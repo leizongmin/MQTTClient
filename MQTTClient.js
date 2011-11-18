@@ -301,10 +301,6 @@ MQTTClient.prototype._onData = function(data){
 		var rl = v;
 		offset--;
 		// debug('rl = ' + rl);
-		// 取主题长度
-		var tl = (data[offset + 2] << 8) + data[offset + 3];
-		// 取主题字符
-		var topic = data.slice(offset + 4, offset + 4 + tl);
 		// 如果消息长度不足，则等待下次接收完数据，并返回
 		if (data.length < offset + 2 + rl) {
 			this._notEnough = true;
@@ -314,6 +310,11 @@ MQTTClient.prototype._onData = function(data){
 			this._notEnoughLength = data.length;
 			return;
 		}
+		// 取主题长度
+		var tl = (data[offset + 2] << 8) + data[offset + 3];
+		// 取主题字符
+		var topic = data.slice(offset + 4, offset + 4 + tl);
+		// 取消息内容
 		var payload = data.slice(offset + 4 + tl, offset + 2 + rl);
 		// 触发message事件
 		this.emit('publish', topic, payload);
