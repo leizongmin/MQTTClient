@@ -16,6 +16,7 @@ var EventEmitter = require('events').EventEmitter;
 var MQTTCONNECT = 0x10;
 var MQTTPUBLISH = 0x30;
 var MQTTSUBSCRIBE = 0x80;
+var MQTTUNSUBSCRIBE = 0xA0;
 var KEEPALIVE = 15000;
 
 var debug = console.log;
@@ -242,6 +243,41 @@ MQTTClient.prototype.publish = function (pub_topic, payload, retained) {
 		this._resetTimeUp();
 	}
 };
+
+/**
+ * 退订主题
+ *
+ * @param {string} topic 主题
+ */
+MQTTClient.prototype.unSubscribe = function (topic) {
+	if (this.connected){
+		if (!Buffer.isBuffer(topic))
+			topic = new Buffer(topic);
+		// Varibale header 
+		// message id
+		var message_id = makeMessageId();
+		// Payload
+		var payload = new Buffer(2 + topic.length);
+		// topic length
+		var i = 0;
+		payload[i++] = topic.length >> 8;
+		payload[i++] = topic.length & 0xFF;
+		// topic string
+		topic.copy(payload, i, 0, topic.length);
+		i += topic.length;
+		// Fixed header
+		var fixed_header = fixHeader(MQTTUNSUBSCRIBE, 0, 0, 0, payload.length + 2);
+		var buffer = new Buffer(fixed_header.length + payload.length + 2);
+		// 连接fixheader
+		fixed_header.copy(buffer, 0, 0, fixed_header.length);
+		// 连接message id
+		message_id.copy(buffer, fixed_header.length, 0, 2);
+		// 连接payload
+		payload.copy(buffer, fixed_header.length + 2, 0, payload.length);
+		this.conn.write(buffer);
+		this._resetTimeUp();
+	}
+}
 
 /**
  * 接收到数据
