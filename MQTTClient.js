@@ -377,7 +377,7 @@ MQTTClient.prototype._live = function () {
 /**
  * 断开连接
  */
-MQTTClient.disconnect = function () {
+MQTTClient.prototype.disconnect = function () {
 	// Send [224,0] to server
 	var packet224 = new Buffer(2);
 	packet224[0] = 0xe0;
