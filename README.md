@@ -1,10 +1,18 @@
-# MQTTClient for Node.js
+# MQTT client for Node.js
 
 
 To start before, you need to know something about MQTT, please see
 [MQTT V3.1 Protocol Specification](http://public.dhe.ibm.com/software/dw/webservices/ws-mqtt/mqtt-v3r1.html)
 
 在使用本模块之前，你需要了解一些MQTT协议的知识，可参阅：[MQTT V3.1 协议规范](http://public.dhe.ibm.com/software/dw/webservices/ws-mqtt/mqtt-v3r1.html)
+
+If you dont't hava a MQTT Servers / Brokers, I recommend using the Mosquitto (An Open Source MQTT server, download: [http://mosquitto.org/download/](http://mosquitto.org/download/))
+
+如果你没有MQTT服务器软件，我推荐使用Mosquitto (一个开源的MQTT服务器, 下载：[http://mosquitto.org/download/](http://mosquitto.org/download/))
+
+For more information, see [http://mqtt.org/](http://mqtt.org/)
+
+更多关于MQTT的信息，可浏览[http://mqtt.org/](http://mqtt.org/)
 
 
 Install 安装
