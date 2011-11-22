@@ -159,6 +159,6 @@ Event
 
 > 当收到PUBLISH消息时触发此事件
 
-> **Arguments**:  topic, payload
+> **Arguments**:  topic, payload, message_id
 
-> 参数topic为消息的主题，payload为消息内容
+> 参数topic为消息的主题，payload为消息内容, message_id为消息ID

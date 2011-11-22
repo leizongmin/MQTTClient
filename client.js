@@ -256,10 +256,16 @@ Client.prototype.publish = function (topic, payload, options, callback) {
 	topic_length[1] = topic.length & 0xFF;
 	var topic_name = MQTT.connect(topic_length, topic);
 	// Message ID
-	var message_id = new Buffer(2);
-	this._last_message_id++;
-	message_id[0] = this._last_message_id >> 8;
-	message_id[1] = this._last_message_id & 0xFF;
+	if (options.qos_level > 0) {
+		var message_id = new Buffer(2);
+		this._last_message_id++;
+		message_id[0] = this._last_message_id >> 8;
+		message_id[1] = this._last_message_id & 0xFF;
+	}
+	else {
+		var message_id = new Buffer(0);
+	}
+	
 	// Fixed header
 	var fixed_header = MQTT.fixedHeader(MQTT.PUBLISH,
 			options.dup_flag, options.qos_level, options.retain,
@@ -519,17 +525,31 @@ messageHandlers[MQTT.PUBLISH] = function (self, fixed_header, chunk) {
 		var data_length = fixed_header.fixed_header_length + fixed_header.remaining_length;
 		if (chunk.length >= data_length) {
 			// 读取出PUBLISH消息
+			// debug(chunk);
 			var topic_length = (chunk[fixed_header.fixed_header_length] << 8)  +
 								chunk[fixed_header.fixed_header_length + 1];
 			var topic = chunk.slice(fixed_header.fixed_header_length + 2,
 								fixed_header.fixed_header_length + 2 + topic_length);
-			var payload = chunk.slice(fixed_header.fixed_header_length + 2 + topic_length,
+			// 如果消息QoS等级大于0，则包含message id
+			if (fixed_header.qos_level > 0) {
+				var message_id = (chunk[fixed_header.fixed_header_length + 2 + topic_length] << 8) +
+							chunk[fixed_header.fixed_header_length + 3 + topic_length];
+				var payload = chunk.slice(fixed_header.fixed_header_length + 2 + topic_length + 2,
 								fixed_header.fixed_header_length + fixed_header.remaining_length);
-			self._onPublish(topic, payload);
+			}
+			else {
+				message_id = 0;
+				var payload = chunk.slice(fixed_header.fixed_header_length + 2 + topic_length,
+								fixed_header.fixed_header_length + fixed_header.remaining_length);
+			}
+			self._onPublish(topic, payload, message_id);
 			// 释放上次操作的空间
 			delete self._data_chunk;
 			delete self._last_fixed_header;
-				
+			// 如果消息QoS等级大于0，则回复此消息
+			if (fixed_header.qos_level > 0)
+				self._response(fixed_header.qos_level, message_id);
+			
 			// 如果还有剩余的数据，则重新触发_onData()
 			if (chunk.length > data_length) {
 				self._onData(chunk.slice(
@@ -551,6 +571,26 @@ messageHandlers[MQTT.PUBLISH] = function (self, fixed_header, chunk) {
 }
 
 /** 有新PUBLISH消息 */
-Client.prototype._onPublish = function (topic, payload) {
-	this.emit('publish', topic, payload);
+Client.prototype._onPublish = function (topic, payload, message_id) {
+	// debug(topic);
+	// debug(payload);
+	// debug(message_id);
+	this.emit('publish', topic, payload, message_id);
+}
+
+/** 回复QoS等级大于0的消息 */
+Client.prototype._response = function (qos_level, message_id) {
+	// log('mqtt::response');
+	
+	var buffer = new Buffer(4);
+	if (qos_level == 1)
+		buffer[0] = MQTT.PUBACK << 4;
+	else
+		buffer[0] = MQTT.PUBREC << 4;
+	buffer[1] = qos_level << 1;
+	buffer[2] = message_id >> 8;
+	buffer[3] = message_id & 0xFF;
+	
+	// debug(buffer);
+	this.connection.write(buffer);
 }
