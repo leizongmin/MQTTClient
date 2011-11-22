@@ -1,6 +1,11 @@
 var mqtt = require('./client');
 
-var c = new mqtt.Client('iot.ucdok.com');
+var opt = {
+	username: 'abcd',
+	password: '123456'
+}
+
+var c = new mqtt.Client('iot.ucdok.com', 1883, opt);
 c.connect(function () {
 	c.publish('abc', '123', {
 		qos_level:	2

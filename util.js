@@ -67,7 +67,7 @@ MQTT.connect = function () {
 	for (var i = 0; i < arguments.length; i++)
 		length += arguments[i].length;
 	var ret = new Buffer(length);
-	
+
 	var cur = 0;
 	for (var i = 0; i < arguments.length; i++) {
 		var l = arguments[i].length;

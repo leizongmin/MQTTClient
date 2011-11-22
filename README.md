@@ -20,7 +20,7 @@ Examples 示例
 
 	var MQTTClient = require('MQTTClient').Client;
 	
-	// if you don't assigned an client_id, will automatically assigns one
+	// if you don't assigned a client_id, will automatically assigns one
 	// 如果没有指定client_id，则程序会自动分配一个
 	var options = {
 		client_id:	'you_client_id'

@@ -18,6 +18,7 @@
  *  		subscribe：订阅主题
  * 		publish：发布消息
  * 		disconnect：关闭连接
+ * 		ping：发送PINGREQ消息
  */
  
 var net = require('net');
@@ -36,7 +37,7 @@ exports.util = MQTT;
  *
  * @param {string} host 主机
  * @param {int} port 端口 默认1883
- * @param {object} options 选项：client_id, username, password, alive_timer
+ * @param {object} options 选项：client_id, username, password, alive_timer, will_retain, will_qos, will_flag, clean_session, will_topic, will_message
  */
 var Client = exports.Client = function (host, port, options) {
 	if (isNaN(port))
@@ -50,6 +51,14 @@ var Client = exports.Client = function (host, port, options) {
 	if (isNaN(options.alive_timer) || options.alive_timer < 1)
 		options.alive_timer = 30;
 	options.ping_timer = parseInt(options.alive_timer * 0.6 * 1000);
+	// 用户名和密码
+	if (typeof options.username == 'string' && options.username.length > 12)
+		throw Error('user names are kept to 12 characters or fewer');
+	if (typeof options.password == 'string' && options.password.length > 12)
+		throw Error('passwords are kept to 12 characters or fewer');
+	// Will flag
+	if (options.will_flag && (typeof options.will_topic != 'string' || typeof options.will_message != 'string'))
+		throw Error('missing will_topic or will_message when will_flag is set');
 	
 	this.host = host;
 	this.port = port;
@@ -111,7 +120,13 @@ Client.prototype._startSession = function () {
 	// Protocol Version Number
 	variable_header[8] = 0x03;	// Version
 	// Connect Flags
-	variable_header[9] = 0x02;
+	var opt = this.options;
+	variable_header[9] = ((opt.username ? 1 : 0) << 7) +
+						((opt.password ? 1 : 0) << 6) +
+						(opt.will_retain << 5) +
+						(opt.will_qos << 3) +
+						(opt.will_flag << 2) +
+						(opt.clean_session << 1);
 	// Keep Alive timer
 	var timer = this.options.alive_timer;
 	variable_header[10] = timer >> 8; 
@@ -121,13 +136,65 @@ Client.prototype._startSession = function () {
 	// Client Identifier
 	var client_id = new Buffer(this.options.client_id);
 	var client_id_length = new Buffer(2);
-	client_id_length[0] = 0x00;
-	client_id_length[1] = client_id.length;
+	client_id_length[0] = client_id.length >> 8;
+	client_id_length[1] = client_id.length & 0xFF;
+	// Will Topic
+	if (opt.will_flag && opt.will_topic) {
+		var will_topic = new Buffer(opt.will_topic);
+		var will_topic_length = new Buffer(2);
+		will_topic_length[0] = will_topic.length >> 8;
+		will_topic_length[1] = will_topic.length & 0xFF;
+	}
+	else {
+		var will_topic = new Buffer(0);
+		var will_topic_length = new Buffer(0);
+	}
+	// Will Message
+	if (opt.will_message && opt.will_message) {
+		var will_message = new Buffer(opt.will_message);
+		var will_message_length = new Buffer(2);
+		will_message_length[0] = will_message.length >> 8;
+		will_message_length[1] = will_message.length & 0xFF;
+	}
+	else {
+		var will_message = new Buffer(0);
+		var will_message_length = new Buffer(0);
+	}
+	// User Name
+	if (opt.username) {
+		var username = new Buffer(opt.username);
+		var username_length = new Buffer(2);
+		username_length[0] = username.length >> 8;
+		username_length[1] = username.length & 0xFF;
+	}
+	else {
+		var username = new Buffer(0);
+		var username_length = new Buffer(0);
+	}
+	// Password
+	if (opt.password) {
+		var password = new Buffer(opt.password);
+		var password_length = new Buffer(2);
+		password_length[0] = password.length >> 8;
+		password_length[1] = password.length & 0xFF;
+	}
+	else {
+		var password = new Buffer(0);
+		var password_length = new Buffer(0);
+	}
+	// 组装Payload
+	var payload = MQTT.connect(client_id_length, client_id,
+							will_topic_length, will_topic,
+							will_message_length, will_message,
+							username_length, username,
+							password_length, password);
+	// debug(client_id);
+	// debug(payload);
 	
 	// Fixed Header
-	var fixed_header = MQTT.fixedHeader(MQTT.CONNECT, 0, 0, false, variable_header.length + client_id.length + 2);
+	var fixed_header = MQTT.fixedHeader(MQTT.CONNECT, 0, 0, false, variable_header.length + payload.length);
 	
-	var buffer = MQTT.connect(fixed_header, variable_header, client_id_length, client_id);
+	var buffer = MQTT.connect(fixed_header, variable_header, payload);
 	// debug(buffer);
 	this.connection.write(buffer);
 }
