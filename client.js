@@ -96,7 +96,7 @@ Client.prototype.connect = function (callback) {
 
 /** 发送CONNECT命令 */
 Client.prototype._startSession = function () {
-	log('mqtt::startSession');
+	// log('mqtt::startSession');
 	
 	var variable_header = new Buffer(12);
 	// Protocol Name
@@ -128,31 +128,31 @@ Client.prototype._startSession = function () {
 	var fixed_header = MQTT.fixedHeader(MQTT.CONNECT, 0, 0, false, variable_header.length + client_id.length + 2);
 	
 	var buffer = MQTT.connect(fixed_header, variable_header, client_id_length, client_id);
-	debug(buffer);
+	// debug(buffer);
 	this.connection.write(buffer);
 }
 
 /** 连接end事件 */
 Client.prototype._onEnd = function () {
-	log('connection::end');
+	// log('connection::end');
 }
 
 /** 连接timeout事件 */
 Client.prototype._onTimeout = function () {
-	log('connection::timeout');
+	// log('connection::timeout');
 	this.emit('timeout');
 }
 
 /** 连接error事件 */
 Client.prototype._onError = function (err) {
-	log('connection::error');
-	debug(err.stack);
+	// log('connection::error');
+	// debug(err.stack);
 	this.emit('error');
 }
 
 /** 连接close事件 */
 Client.prototype._onClose = function () {
-	log('connection::close');
+	// log('connection::close');
 	this.emit('disconnect');
 	this.connected = false;
 	delete this.connection;
@@ -160,24 +160,24 @@ Client.prototype._onClose = function () {
 
 /** 连接data事件 */
 Client.prototype._onData = function (chunk) {
-	log('connection::data');
-	debug(chunk);
+	// log('connection::data');
+	// debug(chunk);
 	
 	// 如果上次的fixed header还未获取完整，则连接这两个数据块
 	if (Buffer.isBuffer(this._fixed_header_chunk)) {
-		log('mqtt::fixed_header_block');
+		// log('mqtt::fixed_header_block');
 		this._onData(MQTT.connect(this._fixed_header_chunk, chunk));
 	}
 	// 如果PUBLISH消息还未获取完
 	else if (this._data_not_enough) {
-		log('mqtt::PUBLISH_block');
+		// log('mqtt::PUBLISH_block');
 		var handler = messageHandlers[MQTT.PUBLISH];
 		handler(this, this._last_fixed_header, chunk);
 	}
 	// 正常解析
 	else {
 		var fixed_header = MQTT.decodeHeader(chunk);
-		debug(fixed_header);
+		// debug(fixed_header);
 		if (fixed_header == false) {
 			this._fixed_header_chunk = chunk;
 		}
@@ -266,10 +266,10 @@ Client.prototype.publish = function (topic, payload, options, callback) {
 			topic_name.length + message_id.length + payload.length);
 	
 	var buffer = MQTT.connect(fixed_header, topic_name, message_id, payload);
-	debug(buffer);
+	// debug(buffer);
 	this.connection.write(buffer);
 	
-	if (typeof callback == 'function') 
+	if (options.qos_level > 0 && typeof callback == 'function') 
 		this._message_callback[this._last_message_id] = callback;
 }
 
@@ -350,7 +350,7 @@ Client.prototype.subscribe = function (topic, options, callback) {
 			message_id.length + payload.length);
 			
 	var buffer = MQTT.connect(fixed_header, message_id, payload);
-	debug(buffer);
+	// debug(buffer);
 	this.connection.write(buffer);
 	
 	if (typeof callback == 'function')
@@ -409,7 +409,7 @@ Client.prototype.unSubscribe = function (topic, options, callback) {
 			message_id.length + payload.length);
 			
 	var buffer = MQTT.connect(fixed_header, message_id, payload);
-	debug(buffer);
+	// debug(buffer);
 	this.connection.write(buffer);
 	
 	if (typeof callback == 'function')
@@ -458,7 +458,7 @@ Client.prototype.ping = function (callback) {
 			self._onTimeout();
 	}, this.options.alive_timer * 1000);
 	
-	debug(buffer);
+	// debug(buffer);
 	this.connection.write(buffer);
 }
 
@@ -467,7 +467,7 @@ messageHandlers[MQTT.PINGRESP] = function (self, fixed_header, chunk) {
 	if (chunk.length < 2)
 		self.emit('error', Error('PINGRESP format error'));
 	else {
-		log('mqtt::PINGRESP');
+		// log('mqtt::PINGRESP');
 		self._wait_for_pingresp = false;
 		setTimeout(function () {
 			self.ping();
@@ -494,16 +494,16 @@ Client.prototype.disconnect = function (callback) {
 	buffer[0] = MQTT.DISCONNECT << 4;
 	buffer[1] = 0x00;
 	
-	debug(buffer);
+	// debug(buffer);
 	this.connection.write(buffer);
 }
 
 
 /** 处理PUBLISH 消息 */
 messageHandlers[MQTT.PUBLISH] = function (self, fixed_header, chunk) {
-	log('mqtt::PUBLISH');
+	// log('mqtt::PUBLISH');
 	if (self._data_not_enough) {
-		log('self._data_not_enough = ' + self._data_not_enough);
+		// log('self._data_not_enough = ' + self._data_not_enough);
 		// 如果数据已足够
 		if (self._data_offset + chunk.length >= self._data_length) {
 			self._data_not_enough = false;

@@ -1,3 +1,15 @@
 {
-	"main":		"./client.js"
+	"name":		"MQTTClient",
+	"main":		"./client.js",
+	"version":	"0.0.1",
+	"description":
+				"An MQTT client for Node.js.",
+	"author": "leizongmin <leizongmin@gmail.com> (http://ucdok.com)",
+	"repository": {
+		"type": "git",
+		"url": "git://github.com/leizongmin/MQTTClient.git"
+	},
+	"engines": {
+		"node": ">= 0.4.1"
+	}
 }

@@ -77,6 +77,7 @@ Publish 发布
 	}
 	client.publish('topic_name', 'payload', options, function (message_id) {
 		// do something if success
+		// 在此处写发布成功后执行的代码
 	});
 	// Simplified:	client.publish('topic_name', 'payload');
 	// 也可以这样：	client.publish('主题', '内容');
@@ -89,7 +90,7 @@ Other 其他
 ```javascript
 
 	// send a PINGREQ to keep alive, will automatically be called
-	// 发送一个PINGREQ消息给服务器，一般情况下会自动被执行
+	// 发送一个PINGREQ消息给服务器，一般情况下会自动执行
 	client.ping(function () {
 		// do something if success
 		// 在此处写服务器返回PINGRESP消息后执行的代码
@@ -110,6 +111,7 @@ Event
 ### connect
 
 > Connect to server success, after received a CONNACK message from the server
+
 > 当连接服务器成功，并收到CONNACK消息后，触发此事件
 
 > **Arguments**: None
@@ -118,6 +120,7 @@ Event
 ### error
 
 > Has an error
+
 > 当发生错误时触发此事件
 
 > **Arguments**: error
@@ -126,6 +129,7 @@ Event
 ### disconnect
 
 > The server close the socket connection
+
 > 当服务器断开连接时触发此事件
 
 > **Arguments**: None
@@ -134,6 +138,7 @@ Event
 ### ping
 
 > After received a PINGRESP message from the server
+
 > 当收到服务器返回的PINGRESP消息时触发此事件
 
 > **Arguments**: None
@@ -142,6 +147,7 @@ Event
 ### timeout
 
 > Not received the PINGRESP message out of **options.alive_timer** seconds
+
 > 当超过指定时间（有options.alive_timer设置）没有收到服务器返回的PINGRESP消息时触发此事件
 
 > **Arguments**: None
@@ -150,6 +156,7 @@ Event
 ### publish
 
 > Received a PUBLISH message
+
 > 当收到PUBLISH消息时触发此事件
 
 > **Arguments**:  topic, payload
