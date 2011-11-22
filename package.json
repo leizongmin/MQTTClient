@@ -3,7 +3,7 @@
 	"main":		"./client.js",
 	"version":	"0.0.1",
 	"description":
-				"An MQTT client for Node.js.",
+				"A MQTT client for Node.js.",
 	"author": "leizongmin <leizongmin@gmail.com> (http://ucdok.com)",
 	"repository": {
 		"type": "git",
