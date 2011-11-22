@@ -12,6 +12,7 @@
  * 		disconnect：连接断开
  * 		publish：接收到消息
  *  		timeout：超时
+ * 		ping：服务器响应ping
  *	方法：
  * 		connect：连接
  *  		subscribe：订阅主题
@@ -68,6 +69,10 @@ util.inherits(Client, EventEmitter);
  */
 Client.prototype.connect = function (callback) {
 	var self = this;
+	
+	if (typeof callback == 'function')
+		this.once('connect', callback);
+	
 	var connection = this.connection = net.createConnection(this.port, this.host);
 	connection.on('connect', function () {
 		self._startSession();
@@ -431,12 +436,15 @@ messageHandlers[MQTT.UNSUBACK] = function (self, fixed_header, chunk) {
 /**
  * 检查服务器状态
  */
-Client.prototype.ping = function () {
+Client.prototype.ping = function (callback) {
 	var self = this;
 	if (!this.connected) {
 		this.emit('error', Error('Please connect to server first'));
 		return;
 	}
+	
+	if (typeof callback == 'function')
+		this.once('ping', callback);
 	
 	// Fixed header
 	var buffer = new Buffer(2);
@@ -464,16 +472,22 @@ messageHandlers[MQTT.PINGRESP] = function (self, fixed_header, chunk) {
 		setTimeout(function () {
 			self.ping();
 		}, self.options.ping_timer);
+		self.emit('ping');
 	}
 }
 
 
 /**
  * 断开连接
+ *
+ * @param {function} callback 回调函数
  */
-Client.prototype.disconnect = function () {
+Client.prototype.disconnect = function (callback) {
 	if (!this.connected)
 		return;
+	
+	if (typeof callback == 'function')
+		this.once('disconnect', callback);
 	
 	// Fixed header
 	var buffer = new Buffer(2);
