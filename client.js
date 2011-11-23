@@ -183,7 +183,7 @@ Client.prototype._startSession = function () {
 		var password_length = new Buffer(0);
 	}
 	// 组装Payload
-	var payload = MQTT.connect(client_id_length, client_id,
+	var payload = MQTT.concat(client_id_length, client_id,
 							will_topic_length, will_topic,
 							will_message_length, will_message,
 							username_length, username,
@@ -194,7 +194,7 @@ Client.prototype._startSession = function () {
 	// Fixed Header
 	var fixed_header = MQTT.fixedHeader(MQTT.CONNECT, 0, 0, false, variable_header.length + payload.length);
 	
-	var buffer = MQTT.connect(fixed_header, variable_header, payload);
+	var buffer = MQTT.concat(fixed_header, variable_header, payload);
 	// debug(buffer);
 	this.connection.write(buffer);
 }
@@ -233,7 +233,7 @@ Client.prototype._onData = function (chunk) {
 	// 如果上次的fixed header还未获取完整，则连接这两个数据块
 	if (Buffer.isBuffer(this._fixed_header_chunk)) {
 		// log('mqtt::fixed_header_block');
-		this._onData(MQTT.connect(this._fixed_header_chunk, chunk));
+		this._onData(MQTT.concat(this._fixed_header_chunk, chunk));
 	}
 	// 如果PUBLISH消息还未获取完
 	else if (this._data_not_enough) {
@@ -321,7 +321,7 @@ Client.prototype.publish = function (topic, payload, options, callback) {
 	var topic_length = new Buffer(2);
 	topic_length[0] = topic.length >> 8;
 	topic_length[1] = topic.length & 0xFF;
-	var topic_name = MQTT.connect(topic_length, topic);
+	var topic_name = MQTT.concat(topic_length, topic);
 	// Message ID
 	if (options.qos_level > 0) {
 		var message_id = new Buffer(2);
@@ -338,7 +338,7 @@ Client.prototype.publish = function (topic, payload, options, callback) {
 			options.dup_flag, options.qos_level, options.retain,
 			topic_name.length + message_id.length + payload.length);
 	
-	var buffer = MQTT.connect(fixed_header, topic_name, message_id, payload);
+	var buffer = MQTT.concat(fixed_header, topic_name, message_id, payload);
 	// debug(buffer);
 	this.connection.write(buffer);
 	
@@ -417,12 +417,12 @@ Client.prototype.subscribe = function (topic, options, callback) {
 	topic_length[1] = topic.length & 0xFF;
 	var requested_qos = new Buffer(1);
 	requested_qos[0] = options.qos_level & 0x03;
-	var payload = MQTT.connect(topic_length, topic, requested_qos);
+	var payload = MQTT.concat(topic_length, topic, requested_qos);
 	// Fixed Header
 	var fixed_header = MQTT.fixedHeader(MQTT.SUBSCRIBE, options.dup_flag, 1, 0,
 			message_id.length + payload.length);
 			
-	var buffer = MQTT.connect(fixed_header, message_id, payload);
+	var buffer = MQTT.concat(fixed_header, message_id, payload);
 	// debug(buffer);
 	this.connection.write(buffer);
 	
@@ -476,12 +476,12 @@ Client.prototype.unSubscribe = function (topic, options, callback) {
 	var topic_length = new Buffer(2);
 	topic_length[0] = topic.length >> 8;
 	topic_length[1] = topic.length & 0xFF;
-	var payload = MQTT.connect(topic_length, topic);
+	var payload = MQTT.concat(topic_length, topic);
 	// Fixed Header
 	var fixed_header = MQTT.fixedHeader(MQTT.UNSUBSCRIBE, options.dup_flag, 1, 0,
 			message_id.length + payload.length);
 			
-	var buffer = MQTT.connect(fixed_header, message_id, payload);
+	var buffer = MQTT.concat(fixed_header, message_id, payload);
 	// debug(buffer);
 	this.connection.write(buffer);
 	
@@ -580,7 +580,7 @@ messageHandlers[MQTT.PUBLISH] = function (self, fixed_header, chunk) {
 		// 如果数据已足够
 		if (self._data_offset + chunk.length >= self._data_length) {
 			self._data_not_enough = false;
-			messageHandlers[MQTT.PUBLISH](self, fixed_header,  MQTT.connect(self._data_chunk, chunk));
+			messageHandlers[MQTT.PUBLISH](self, fixed_header,  MQTT.concat(self._data_chunk, chunk));
 		}
 		// 如果数据还是不够
 		else {

@@ -62,7 +62,7 @@ MQTT.fixedHeader = function (message_type, dup_flag, qos_level, retain, remainin
  * @param {Buffer} buffer_2
  * @return {Buffer}
  */
-MQTT.connect = function () {
+MQTT.concat = function () {
 	var length = 0;
 	for (var i = 0; i < arguments.length; i++)
 		length += arguments[i].length;
