@@ -1,5 +1,7 @@
 # MQTT client for Node.js
 
+[![Greenkeeper badge](https://badges.greenkeeper.io/leizongmin/MQTTClient.svg)](https://greenkeeper.io/)
+
 
 To start before, you need to know something about MQTT, please see
 [MQTT V3.1 Protocol Specification](http://public.dhe.ibm.com/software/dw/webservices/ws-mqtt/mqtt-v3r1.html)
